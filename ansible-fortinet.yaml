@@ -1,0 +1,98 @@
+- name: Create logstash config file and symlink
+  hosts: localhost
+  become: true
+  vars:
+    config_file_path: /usr/local/sof-elk/configfiles/7000-fortinet.conf
+    symlink_path: /etc/logstash/conf.d/7000-fortinet.conf
+    playbook_dir: "{{ playbook_dir }}"
+    fortinet_dir_path: /logstash/fortinet
+    sincedb_file_path: /var/log/logstash/sincedb
+    kibana_host: localhost
+    kibana_port: 5601
+    elastic_port: 9200
+    index_pattern: fortinet-logs-*
+    index_pattern_title: fortinet-*
+    dashboard_json: "{{ lookup('file', playbook_dir + '/dashboard.json') }}"
+
+  tasks:
+    - name: Create logstash config file
+      copy:
+        dest: "{{ config_file_path }}"
+        src: "{{ playbook_dir }}/fortinet.conf"
+        mode: "0644"
+        owner: root
+        group: root
+
+    - name: Create symlink to logstash config file
+      file:
+        src: "{{ config_file_path }}"
+        dest: "{{ symlink_path }}"
+        state: link
+        owner: root
+        group: root
+        mode: "0777"
+    - name: Create fortinet directory
+      file:
+        path: "{{ fortinet_dir_path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "1777"
+    - name: Create sincedb file
+      file:
+        path: "{{ sincedb_file_path }}"
+        state: touch
+        mode: "0644"
+        owner: logstash
+        group: logstash
+    - name: Create index pattern
+      uri:
+        url: http://{{ kibana_host }}:{{ kibana_port }}/api/saved_objects/index-pattern/a47ee520-e9b7-11ed-ae5e-b70f9e8f7d03
+        method: POST
+        headers:
+          kbn-xsrf: true
+          Content-Type: application/json
+        body_format: json
+        body:
+          attributes:
+            title: "{{ index_pattern_title }}"
+            timeFieldName: "@timestamp"
+            fields: "[]"
+          references:
+            - id: "{{ index_pattern }}"
+              name: "index-pattern"
+              type: "index-pattern"
+      register: index_pattern_result
+    - name: Create Fortinet index template
+      uri:
+        url: "http://{{ kibana_host }}:{{ elastic_port }}/_index_template/fortinet"
+        method: PUT
+        body:
+          index_patterns:
+            - "{{ index_pattern }}"
+          template:
+            mappings:
+              properties:
+                srcip:
+                  type: "ip"
+                dstip:
+                  type: "ip"
+                transip:
+                  type: "ip"
+        body_format: json
+        headers:
+          Content-Type: "application/json"
+      register: result
+    - name: Import Fortinet dashboard
+      uri:
+        url: http://{{ kibana_host }}:{{ kibana_port }}/api/kibana/dashboards/import?exclude=index-pattern
+        method: POST
+        body_format: raw
+        body: "{{ dashboard_json | to_json}}"
+        headers:
+          kbn-xsrf: true
+          Content-Type: application/json
+    - name: Restart logstash service
+      systemd:
+        name: logstash
+        state: restarted
