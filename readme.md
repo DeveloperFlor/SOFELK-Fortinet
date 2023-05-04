@@ -84,7 +84,7 @@ Contains the ansible playbook configuration that:
 
 - Restarts the logstash service after its done
 
-## `hosts.ini`
+### `hosts.ini`
 
 Just a file to specify the hosts the ansible script has to run on (localhost)
 
