@@ -19,7 +19,7 @@
 2. Copy the ansible configuration files to the VM
    
    ```bash
-   scp .\SOF-ELK\* elk_user@{VM_IP}:/home/elk_user/
+   scp .\SOFELK-Fortinet\* elk_user@{VM_IP}:/home/elk_user/
    forensics
    ```
 
